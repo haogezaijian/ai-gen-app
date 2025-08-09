@@ -11,8 +11,8 @@
     <groupId>com.haoge</groupId>
     <artifactId>ai-gen-app</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>hao-ai-code-platform</name>
-    <description>hao-ai-code-platform</description>
+    <name>ai-gen-app</name>
+    <description>ai-gen-app</description>
     <url/>
     <licenses>
         <license/>
