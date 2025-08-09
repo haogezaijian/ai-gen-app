@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: ai-gen-app
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ai_gen_app
+    username: root
+    password: 123456
+  profiles:
+    active: local
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+# springdoc-openapi
+springdoc:
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.haoge.aigenapp.controller
+# knife4j
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+#langchain4j:
+#  open-ai:
+#    chat-model:
+#      api-key: API-KEY
+#      base-url: https://api.deepseek.com
+#      model-name: deepseek-chat
+#      log-requests: true
+#      log-responses: true
+#      max-tokens: 8192
+#      strict-json-schema: true
+#      response-format: json_object
+#    streaming-chat-model:
+#      api-key: API-KEY
+#      base-url: https://api.deepseek.com
+#      model-name: deepseek-chat
+#      log-requests: true
+#      log-responses: true
+#      max-tokens: 8192
