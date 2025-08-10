@@ -1,6 +1,9 @@
 spring:
   application:
     name: ai-gen-app
+  session:
+    store-type: redis
+    timeout: 2592000
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ai_gen_app
@@ -18,6 +21,9 @@ server:
   port: 8123
   servlet:
     context-path: /api
+    session:
+      cookie:
+        max-age: 2592000
 # springdoc-openapi
 springdoc:
   group-configs:
