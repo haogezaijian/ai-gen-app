@@ -7,6 +7,8 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.haoge.aigenapp.constannt.AppConstant;
 import com.haoge.aigenapp.core.AiCodeGeneratorFacade;
+import com.haoge.aigenapp.core.builder.VueProjectBuilder;
+import com.haoge.aigenapp.core.handler.StreamHandlerExecutor;
 import com.haoge.aigenapp.exception.BusinessException;
 import com.haoge.aigenapp.exception.ErrorCode;
 import com.haoge.aigenapp.exception.ThrowUtils;
@@ -54,6 +56,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
 
     @Resource
     private ChatHistoryService chatHistoryService;
+
+    @Resource
+    private StreamHandlerExecutor streamHandlerExecutor;
+
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
 
     @Override
     public AppVO getAppVO(App app) {
@@ -142,19 +150,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         //5.保存用户消息
         chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
         // 6. 调用 AI 生成代码
-        Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
         //7.收集AI响应内容 并且在完成后保存记录到对话历史
-        StringBuilder contentBuilder = new StringBuilder();
-        return contentFlux.map(chunk -> {
-            contentBuilder.append(chunk);
-            return chunk;
-        }).doOnComplete(() -> {
-            // 流式返回完成，保存对话记录
-            chatHistoryService.addChatMessage(appId, contentBuilder.toString(), ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-        }).doOnError(e -> {
-            // 流式返回错误，保存对话记录
-            chatHistoryService.addChatMessage(appId, "AI 回复失败"+e.getMessage(), ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-        });
+        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, codeGenTypeEnum);
     }
 
 
@@ -185,21 +183,35 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用代码不存在，请先生成代码");
         }
-        // 7. 复制文件到部署目录
+        // 7. Vue 项目特殊处理：执行构建
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
+        if (codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
+            // Vue 项目需要构建
+            boolean buildSuccess = vueProjectBuilder.buildProject(sourceDirPath);
+            ThrowUtils.throwIf(!buildSuccess, ErrorCode.SYSTEM_ERROR, "项目构建失败");
+            // 检查 dist 目录是否存在
+            File distDir = new File(sourceDirPath, "dist");
+            ThrowUtils.throwIf(!distDir.exists(), ErrorCode.SYSTEM_ERROR, "项目构建失败");
+            // 将 dist 目录作为部署源
+            sourceDir = distDir;
+            log.info("Vue 项目构建成功，将部署 dist 目录: {}", distDir.getAbsolutePath());
+        }
+        // 8. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
+
         try {
             FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "部署失败：" + e.getMessage());
         }
-        // 8. 更新应用的 deployKey 和部署时间
+        // 9. 更新应用的 deployKey 和部署时间
         App updateApp = new App();
         updateApp.setId(appId);
         updateApp.setDeployKey(deployKey);
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
-        // 9. 返回可访问的 URL
+        // 10. 返回可访问的 URL
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
 
