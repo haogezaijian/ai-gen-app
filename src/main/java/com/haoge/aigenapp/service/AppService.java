@@ -1,5 +1,6 @@
 package com.haoge.aigenapp.service;
 
+import com.haoge.aigenapp.model.dto.app.AppAddRequest;
 import com.haoge.aigenapp.model.dto.app.AppQueryRequest;
 import com.haoge.aigenapp.model.entity.User;
 import com.haoge.aigenapp.model.vo.app.AppVO;
@@ -16,6 +17,8 @@ import java.util.List;
  * @author haoge
  */
 public interface AppService extends IService<App> {
+
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
 
     AppVO getAppVO(App app);
 
