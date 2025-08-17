@@ -53,3 +53,12 @@ knife4j:
 #      log-requests: true
 #      log-responses: true
 #      max-tokens: 8192
+
+
+#cos:
+#  client:
+#    host: your-custom-domain.com
+#    secretId: your-secret-id
+#    secretKey: your-secret-key
+#    region: ap-shanghai
+#    bucket: your-bucket-name
