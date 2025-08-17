@@ -20,6 +20,7 @@ application-local.yml
 *.iws
 *.iml
 *.ipr
+*.csv
 
 ### NetBeans ###
 /nbproject/private/
