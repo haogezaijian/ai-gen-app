@@ -2,7 +2,7 @@ package com.haoge.aigenapp.ai;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.haoge.aigenapp.ai.tools.FileWriteTool;
+import com.haoge.aigenapp.ai.tools.*;
 import com.haoge.aigenapp.exception.BusinessException;
 import com.haoge.aigenapp.exception.ErrorCode;
 import com.haoge.aigenapp.model.enums.CodeGenTypeEnum;
@@ -35,6 +35,9 @@ public class AiCodeGeneratorServiceFactory {
 
     @Resource
     private StreamingChatModel reasoningStreamingChatModel;
+
+    @Resource
+    private ToolManager toolManager;
 
     private final RedisChatMemoryStore redisChatMemoryStore;
 
@@ -96,7 +99,7 @@ public class AiCodeGeneratorServiceFactory {
                     .chatModel(chatModel)
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(memoryId -> chatMemory)
-                    .tools(new FileWriteTool())
+                    .tools(toolManager.getAllTools())
                     //处理工具调用幻觉问题
                     .hallucinatedToolNameStrategy(toolExecutionRequest ->
                             ToolExecutionResultMessage.from(toolExecutionRequest,
