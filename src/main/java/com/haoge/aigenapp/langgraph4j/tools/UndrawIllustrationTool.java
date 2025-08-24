@@ -23,14 +23,16 @@ import java.util.List;
 @Component
 public class UndrawIllustrationTool {
 
-    private static final String UNDRAW_API_URL = "https://undraw.co/_next/data/mMWmJSt23qpgo8cLTD_pB/search/%s.json?term=%s";
+    private static final String UNDRAW_API_URL = "https://undraw.co/_next/data/_FTM2d-THILOVilGvbqjc/search/%s.json?term=%s";
 
     @Tool("搜索插画图片，用于网站美化和装饰")
     public List<ImageResource> searchIllustrations(@P("搜索关键词") String query) {
+        log.info("搜索关键词：{}", query);
+        query = StrUtil.replace(query, " ", "-");
         List<ImageResource> imageList = new ArrayList<>();
         int searchCount = 12;
         String apiUrl = String.format(UNDRAW_API_URL, query, query);
-
+        log.info("开始搜索插画图片：{}", apiUrl);
         // 使用 try-with-resources 自动释放 HTTP 资源
         try (HttpResponse response = HttpRequest.get(apiUrl).timeout(10000).execute()) {
             if (!response.isOk()) {

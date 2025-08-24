@@ -2,6 +2,7 @@ package com.haoge.aigenapp.langgraph4j;
 
 import com.haoge.aigenapp.exception.BusinessException;
 import com.haoge.aigenapp.exception.ErrorCode;
+import com.haoge.aigenapp.langgraph4j.concurrent.*;
 import com.haoge.aigenapp.langgraph4j.model.QualityResult;
 import com.haoge.aigenapp.langgraph4j.node.*;
 import com.haoge.aigenapp.langgraph4j.state.WorkflowContext;
@@ -21,69 +22,83 @@ import static org.bsc.langgraph4j.StateGraph.START;
 import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
 
 @Slf4j
-public class CodeGenWorkflow {
+public class CodeGenConcurrentWorkflow {
 
     /**
-     * 创建完整的工作流
+     * 创建并发工作流
      */
     public CompiledGraph<MessagesState<String>> createWorkflow() {
         try {
             return new MessagesStateGraph<String>()
-                    // 添加节点 - 使用完整实现的节点
-                    .addNode("image_collector", ImageCollectorNode.create())
+                    // 添加节点
+                    .addNode("image_plan", ImagePlanNode.create())
                     .addNode("prompt_enhancer", PromptEnhancerNode.create())
                     .addNode("router", RouterNode.create())
                     .addNode("code_generator", CodeGeneratorNode.create())
                     .addNode("code_quality_check", CodeQualityCheckNode.create())
                     .addNode("project_builder", ProjectBuilderNode.create())
 
+                    // 添加并发图片收集节点
+                    .addNode("content_image_collector", ContentImageCollectorNode.create())
+                    .addNode("illustration_collector", IllustrationCollectorNode.create())
+                    .addNode("diagram_collector", DiagramCollectorNode.create())
+                    .addNode("logo_collector", LogoCollectorNode.create())
+                    .addNode("image_aggregator", ImageAggregatorNode.create())
+
                     // 添加边
-                    .addEdge(START, "image_collector")
-                    .addEdge("image_collector", "prompt_enhancer")
+                    .addEdge(START, "image_plan")
+
+                    // 并发分支：从计划节点分发到各个收集节点
+                    .addEdge("image_plan", "content_image_collector")
+                    .addEdge("image_plan", "illustration_collector")
+                    .addEdge("image_plan", "diagram_collector")
+                    .addEdge("image_plan", "logo_collector")
+
+                    // 汇聚：所有收集节点都汇聚到聚合器
+                    .addEdge("content_image_collector", "image_aggregator")
+                    .addEdge("illustration_collector", "image_aggregator")
+                    .addEdge("diagram_collector", "image_aggregator")
+                    .addEdge("logo_collector", "image_aggregator")
+
+                    // 继续串行流程
+                    .addEdge("image_aggregator", "prompt_enhancer")
                     .addEdge("prompt_enhancer", "router")
                     .addEdge("router", "code_generator")
                     .addEdge("code_generator", "code_quality_check")
-                    // 新增质检条件边：根据质检结果决定下一步
+
+                    // 质检条件边
                     .addConditionalEdges("code_quality_check",
                             edge_async(this::routeAfterQualityCheck),
                             Map.of(
-                                    "build", "project_builder",   // 质检通过且需要构建
-                                    "skip_build", END,            // 质检通过但跳过构建
-                                    "fail", "code_generator"      // 质检失败，重新生成
+                                    "build", "project_builder",
+                                    "skip_build", END,
+                                    "fail", "code_generator"
                             ))
                     .addEdge("project_builder", END)
-
-                    // 编译工作流
                     .compile();
         } catch (GraphStateException e) {
-            log.error("工作流创建失败", e);
-            e.printStackTrace();
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "工作流创建失败");
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "并发工作流创建失败");
         }
     }
 
     /**
-     * 执行工作流
+     * 执行并发工作流
      */
     public WorkflowContext executeWorkflow(String originalPrompt) {
         CompiledGraph<MessagesState<String>> workflow = createWorkflow();
-
-        // 初始化 WorkflowContext
         WorkflowContext initialContext = WorkflowContext.builder()
                 .originalPrompt(originalPrompt)
                 .currentStep("初始化")
                 .build();
-
         GraphRepresentation graph = workflow.getGraph(GraphRepresentation.Type.MERMAID);
-        log.info("工作流图:\n{}", graph.content());
-        log.info("开始执行代码生成工作流");
-
+        log.info("并发工作流图:\n{}", graph.content());
+        log.info("开始执行并发代码生成工作流");
         WorkflowContext finalContext = null;
         int stepCounter = 1;
         for (NodeOutput<MessagesState<String>> step : workflow.stream(
-                Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext))) {
+                Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext)
+        )) {
             log.info("--- 第 {} 步完成 ---", stepCounter);
-            // 显示当前状态
             WorkflowContext currentContext = WorkflowContext.getContext(step.state());
             if (currentContext != null) {
                 finalContext = currentContext;
@@ -91,33 +106,27 @@ public class CodeGenWorkflow {
             }
             stepCounter++;
         }
-        log.info("代码生成工作流执行完成！");
+        log.info("并发代码生成工作流执行完成！");
         return finalContext;
     }
 
-    private String routeBuildOrSkip(MessagesState<String> state) {
-        WorkflowContext context = WorkflowContext.getContext(state);
-        CodeGenTypeEnum generationType = context.getGenerationType();
-        // HTML 和 MULTI_FILE 类型不需要构建，直接结束
-        if (generationType == CodeGenTypeEnum.HTML || generationType == CodeGenTypeEnum.MULTI_FILE) {
-            return "skip_build";
-        }
-        // VUE_PROJECT 需要构建
-        return "build";
-    }
-
-
+    /**
+     * 路由函数：根据质检结果决定下一步
+     */
     private String routeAfterQualityCheck(MessagesState<String> state) {
         WorkflowContext context = WorkflowContext.getContext(state);
         QualityResult qualityResult = context.getQualityResult();
-        // 如果质检失败，重新生成代码
+
         if (qualityResult == null || !qualityResult.getIsValid()) {
             log.error("代码质检失败，需要重新生成代码");
             return "fail";
         }
-        // 质检通过，使用原有的构建路由逻辑
         log.info("代码质检通过，继续后续流程");
-        return routeBuildOrSkip(state);
+        CodeGenTypeEnum generationType = context.getGenerationType();
+        if (generationType == CodeGenTypeEnum.VUE_PROJECT) {
+            return "build";
+        } else {
+            return "skip_build";
+        }
     }
-
 }
