@@ -17,6 +17,8 @@ import com.haoge.aigenapp.model.dto.app.*;
 import com.haoge.aigenapp.model.entity.User;
 import com.haoge.aigenapp.model.enums.CodeGenTypeEnum;
 import com.haoge.aigenapp.model.vo.app.AppVO;
+import com.haoge.aigenapp.ratelimiter.annotation.RateLimit;
+import com.haoge.aigenapp.ratelimiter.enums.RateLimitType;
 import com.haoge.aigenapp.service.ProjectDownloadService;
 import com.haoge.aigenapp.service.UserService;
 import com.mybatisflex.core.paginate.Page;
@@ -301,6 +303,7 @@ public class AppController {
      * @return 生成结果流
      */
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RateLimit(limitType = RateLimitType.USER, rate = 15, rateInterval = 60)
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
                                                        @RequestParam String message,
                                                        HttpServletRequest request) {
